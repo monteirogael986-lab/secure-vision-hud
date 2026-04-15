@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Mic, MicOff, ShieldCheck, ShieldX, User, MessageSquare, Bot, Sparkles, AlertCircle } from "lucide-react";
+import { Heart, Mic, ShieldCheck, ShieldX, User, MessageSquare, Bot, Sparkles } from "lucide-react";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { queryAI, type AIResponse } from "@/lib/aiService";
@@ -14,39 +14,50 @@ export default function HudOverlay() {
   const processingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported } =
+  const { isListening, transcript, interimTranscript, startListening, stopListening, simulateSpeech, supported } =
     useSpeechRecognition();
 
-  // Reset timer to hide interface after 5s of inactivity
+  // Robust timer to hide interface after 5s of inactivity
   const startHideTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      if (!processingRef.current && !isListening) {
-        setShowInterface(false);
-        setResponse(null);
-      }
-    }, 5000);
-  }, [isListening]);
+    
+    // Timer only runs if we are not currently processing something
+    if (!loading) {
+      timerRef.current = setTimeout(() => {
+        if (!processingRef.current && !loading) {
+          setShowInterface(false);
+          setResponse(null);
+        }
+      }, 5000);
+    }
+  }, [loading]);
 
-  // Strict check for the word "Jarvis" to reactivate the UI
+  // Restart timer on key state changes, but NOT on interim noise
+  useEffect(() => {
+    if (showInterface && !loading) {
+      startHideTimer();
+    }
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [showInterface, loading, response, lastTranscript, startHideTimer]);
+
+  // Command "Jarvis" logic
   const checkJarvis = useCallback((text: string) => {
     const cleanText = text.toLowerCase().trim();
-    // Activation ONLY if "jarvis" is the spoken word
     if (cleanText === "jarvis" || cleanText.includes("jarvis")) {
       setShowInterface(true);
-      startHideTimer();
       return true;
     }
     return false;
-  }, [startHideTimer]);
+  }, []);
 
   const processQuery = useCallback(async (text: string) => {
     if (!text.trim() || processingRef.current) return;
     
-    // Check for Jarvis even in normal mode to keep it alive
-    if (checkJarvis(text) && !showInterface) return;
+    if (checkJarvis(text)) return;
 
-    if (!showInterface) return; // Ignore other commands if hidden
+    if (!showInterface) return;
 
     processingRef.current = true;
     setLoading(true);
@@ -55,30 +66,30 @@ export default function HudOverlay() {
     try {
       const res = await queryAI(text.trim());
       setResponse(res);
-      startHideTimer();
     } catch (err) {
-      console.error("Erro ao processar query:", err);
+      console.error("Erro:", err);
     } finally {
       setLoading(false);
       processingRef.current = false;
     }
-  }, [showInterface, checkJarvis, startHideTimer]);
+  }, [showInterface, checkJarvis]);
 
-  // Handle final results
   useEffect(() => {
     if (transcript && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, processQuery]);
 
-  // Handle interim results for fast "Jarvis" activation
+  // Catch Jarvis in interim results for better responsiveness
   useEffect(() => {
     if (interimTranscript && !showInterface) {
-      checkJarvis(interimTranscript);
+      if (interimTranscript.toLowerCase().includes("jarvis")) {
+        setShowInterface(true);
+      }
     }
-  }, [interimTranscript, showInterface, checkJarvis]);
+  }, [interimTranscript, showInterface]);
 
-  // Persistent background listening
+  // background listening
   useEffect(() => {
     if (supported && !isListening && !processingRef.current) {
       startListening(true);
@@ -87,13 +98,12 @@ export default function HudOverlay() {
 
   const handleMicClick = useCallback(() => {
     setShowInterface(true);
-    startHideTimer();
     if (isListening) {
       stopListening();
     } else {
       startListening(false);
     }
-  }, [isListening, startListening, stopListening, startHideTimer]);
+  }, [isListening, startListening, stopListening]);
 
   const displayText = interimTranscript || transcript;
 
@@ -161,9 +171,9 @@ export default function HudOverlay() {
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.8, opacity: 0 }}
-                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.3)]"
+                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center"
                     >
-                      <Bot className="w-12 h-12 text-primary animate-bounce" />
+                      <Bot className="w-12 h-12 text-primary" />
                     </motion.div>
                   ) : (
                     <motion.button
@@ -172,17 +182,9 @@ export default function HudOverlay() {
                       animate={{ scale: 1, opacity: 1 }}
                       exit={{ scale: 0.8, opacity: 0 }}
                       onClick={handleMicClick}
-                      className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all ${
-                        isListening
-                          ? "bg-hud-danger/20 border-hud-danger/60 text-hud-danger shadow-[0_0_30px_rgba(255,0,0,0.3)]"
-                          : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 shadow-[0_0_20px_rgba(0,255,255,0.1)]"
-                      }`}
+                      className="relative w-24 h-24 rounded-full border-2 border-primary/40 bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
                     >
-                      {isListening ? (
-                        <MicOff className="w-10 h-10" />
-                      ) : (
-                        <Mic className="w-10 h-10" />
-                      )}
+                      <Mic className="w-10 h-10" />
                     </motion.button>
                   )}
                 </AnimatePresence>
@@ -190,7 +192,7 @@ export default function HudOverlay() {
                 {!loading && (
                   <button
                     onClick={() => simulateSpeech()}
-                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary hover:border-primary/60 transition-colors whitespace-nowrap"
+                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary transition-colors whitespace-nowrap"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span className="font-mono text-[9px] tracking-widest uppercase">Simular</span>
@@ -204,7 +206,7 @@ export default function HudOverlay() {
                     Assistente Processando
                   </p>
                 ) : (
-                  <p className={`font-mono text-sm tracking-wide ${isListening ? 'text-primary' : 'text-muted-foreground'}`}>
+                  <p className="font-mono text-sm tracking-wide text-primary">
                     {displayText ? `"${displayText}"` : "AGUARDANDO..."}
                   </p>
                 )}
@@ -240,7 +242,7 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* SAP Logo Watermark - Always Visible */}
+      {/* SAP Logo Watermark */}
       <div className="absolute bottom-6 right-6 opacity-40 pointer-events-none z-50">
         <div className="flex flex-col items-end">
           <p className="font-display text-3xl tracking-tighter text-primary select-none font-black italic hud-glow-text">
