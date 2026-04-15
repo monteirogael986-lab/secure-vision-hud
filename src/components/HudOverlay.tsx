@@ -28,9 +28,11 @@ export default function HudOverlay() {
     }, 5000);
   }, [isListening]);
 
-  // Command "Jarvis" to show interface
+  // Strict check for the word "Jarvis" to reactivate the UI
   const checkJarvis = useCallback((text: string) => {
-    if (text.toLowerCase().includes("jarvis")) {
+    const cleanText = text.toLowerCase().trim();
+    // Activation ONLY if "jarvis" is the spoken word
+    if (cleanText === "jarvis" || cleanText.includes("jarvis")) {
       setShowInterface(true);
       startHideTimer();
       return true;
@@ -41,12 +43,14 @@ export default function HudOverlay() {
   const processQuery = useCallback(async (text: string) => {
     if (!text.trim() || processingRef.current) return;
     
-    if (checkJarvis(text)) return;
+    // Check for Jarvis even in normal mode to keep it alive
+    if (checkJarvis(text) && !showInterface) return;
+
+    if (!showInterface) return; // Ignore other commands if hidden
 
     processingRef.current = true;
     setLoading(true);
     setLastTranscript(text);
-    setShowInterface(true); // Ensure interface is visible when processing
     
     try {
       const res = await queryAI(text.trim());
@@ -58,26 +62,25 @@ export default function HudOverlay() {
       setLoading(false);
       processingRef.current = false;
     }
-  }, [checkJarvis, startHideTimer]);
+  }, [showInterface, checkJarvis, startHideTimer]);
 
-  // Handle results from voice or simulation
+  // Handle final results
   useEffect(() => {
     if (transcript && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, processQuery]);
 
-  // Handle interim results specifically for "Jarvis"
+  // Handle interim results for fast "Jarvis" activation
   useEffect(() => {
     if (interimTranscript && !showInterface) {
       checkJarvis(interimTranscript);
     }
   }, [interimTranscript, showInterface, checkJarvis]);
 
-  // Auto-start listening in background if supported, for Jarvis wake word
+  // Persistent background listening
   useEffect(() => {
     if (supported && !isListening && !processingRef.current) {
-      // Start in background mode (continuous) to catch Jarvis
       startListening(true);
     }
   }, [supported, isListening, startListening]);
@@ -95,10 +98,7 @@ export default function HudOverlay() {
   const displayText = interimTranscript || transcript;
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-10 bg-transparent">
-      {/* Scanline - Ensure it doesn't block camera */}
-      <div className="absolute inset-0 hud-scanline pointer-events-none opacity-30" />
-
+    <div className="absolute inset-0 pointer-events-none z-20 bg-transparent">
       {/* Corner brackets */}
       <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
       <div className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 border-primary/40" />
@@ -214,20 +214,7 @@ export default function HudOverlay() {
         </AnimatePresence>
       </div>
 
-      {/* Jarvis Button - Floating and discrete when interface is hidden */}
-      {!showInterface && (
-        <div className="absolute bottom-32 left-1/2 -translate-x-1/2 pointer-events-auto">
-          <button
-            onClick={() => simulateSpeech("Jarvis")}
-            className="flex items-center gap-2 px-4 py-2 rounded-full border border-primary/30 bg-primary/10 text-primary/60 hover:text-primary animate-pulse transition-all"
-          >
-            <Bot className="w-4 h-4" />
-            <span className="font-mono text-[10px] tracking-widest uppercase">Chamar Jarvis</span>
-          </button>
-        </div>
-      )}
-
-      {/* Response panel - Moved up */}
+      {/* Response panel - Positioned Up */}
       <AnimatePresence>
         {showInterface && (response || lastTranscript) && !loading && (
           <motion.div
@@ -253,7 +240,7 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* SAP Logo Watermark */}
+      {/* SAP Logo Watermark - Always Visible */}
       <div className="absolute bottom-6 right-6 opacity-40 pointer-events-none z-50">
         <div className="flex flex-col items-end">
           <p className="font-display text-3xl tracking-tighter text-primary select-none font-black italic hud-glow-text">
