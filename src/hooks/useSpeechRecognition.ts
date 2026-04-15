@@ -35,9 +35,12 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     recognition.continuous = true;
 
     recognition.onresult = (event: any) => {
-      const text = event.results[0][0].transcript;
-      setTranscript(text);
-      setIsListening(false);
+      const result = event.results[0];
+      if (result.isFinal) {
+        const text = result[0].transcript;
+        setTranscript(text);
+        setIsListening(false);
+      }
     };
 
     recognition.onerror = (event: any) => {
