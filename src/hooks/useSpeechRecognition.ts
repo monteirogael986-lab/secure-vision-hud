@@ -26,61 +26,63 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
   const startListening = useCallback(() => {
     if (!SpeechRecognitionAPI) {
-      setError("Speech recognition not supported");
+      setError("Microfone não suportado no navegador.");
       return;
     }
 
     if (recognitionRef.current) {
-      recognitionRef.current.stop();
+      try { recognitionRef.current.stop(); } catch(e) {}
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.lang = "pt-BR"; // Change to Portuguese since the app is in PT
+    recognition.lang = "pt-BR";
     recognition.interimResults = true;
-    recognition.continuous = true;
+    recognition.continuous = false; // Set to false to trigger onresult more predictably
 
     recognition.onstart = () => {
       setIsListening(true);
       setError(null);
+      setTranscript("");
+      setInterimTranscript("");
     };
 
     recognition.onresult = (event: any) => {
       let finalTranscript = "";
       let interim = "";
 
-      for (let i = event.results.length - 1; i >= 0; i--) {
+      for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
-          finalTranscript = result[0].transcript;
+          finalTranscript += result[0].transcript;
         } else {
-          interim = result[0].transcript;
+          interim += result[0].transcript;
         }
       }
 
       if (finalTranscript) {
         setTranscript(finalTranscript);
         setInterimTranscript("");
-        setIsListening(false);
+        // No auto-stop here, let onend handle it
       } else {
         setInterimTranscript(interim);
       }
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech Recognition Error:", event.error);
-      setError(event.error);
+      console.error("Speech Error:", event.error);
+      if (event.error === 'not-allowed') {
+        setError("Permissão de microfone negada.");
+      } else {
+        setError(`Erro: ${event.error}`);
+      }
       setIsListening(false);
-      setInterimTranscript("");
     };
 
     recognition.onend = () => {
       setIsListening(false);
-      setInterimTranscript("");
     };
 
     recognitionRef.current = recognition;
-    setTranscript("");
-    setInterimTranscript("");
     recognition.start();
   }, [SpeechRecognitionAPI]);
 
@@ -89,10 +91,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       recognitionRef.current.stop();
     }
     setIsListening(false);
-    setInterimTranscript("");
   }, []);
 
   const simulateSpeech = useCallback(() => {
+    // Reset state
     setTranscript("");
     setInterimTranscript("");
     setIsListening(true);
@@ -105,21 +107,16 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     ];
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
     
-    // Simulate interim results
-    setTimeout(() => {
-      setInterimTranscript(phrase.split(" ")[0] + "...");
-    }, 1000);
-
-    setTimeout(() => {
-      setInterimTranscript(phrase + "...");
-    }, 2000);
+    // Simulate thinking/interim
+    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 800);
+    setTimeout(() => setInterimTranscript(phrase.split(" ").slice(0, 2).join(" ") + "..."), 1500);
 
     // Final result
     setTimeout(() => {
       setTranscript(phrase);
       setInterimTranscript("");
       setIsListening(false);
-    }, 3500);
+    }, 2500);
   }, []);
 
   return { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported };

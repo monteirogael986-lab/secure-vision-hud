@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Mic, MicOff, ShieldCheck, ShieldX, User, MessageSquare, Bot, Sparkles, AlertCircle } from "lucide-react";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
@@ -10,22 +10,31 @@ export default function HudOverlay() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
+  const processingRef = useRef(false);
+
   const { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported } =
     useSpeechRecognition();
 
   const processQuery = useCallback(async (text: string) => {
-    if (!text.trim() || loading) return;
+    if (!text.trim() || processingRef.current) return;
+    
+    processingRef.current = true;
     setLoading(true);
     setLastTranscript(text);
-    // Simulating thinking time
-    await new Promise(r => setTimeout(r, 1500));
-    const res = await queryAI(text.trim());
-    setResponse(res);
-    setLoading(false);
-  }, [loading]);
+    
+    try {
+      const res = await queryAI(text.trim());
+      setResponse(res);
+    } catch (err) {
+      console.error("Erro ao processar query:", err);
+    } finally {
+      setLoading(false);
+      processingRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
-    if (transcript && !isListening) {
+    if (transcript && !isListening && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, isListening, processQuery]);
@@ -93,7 +102,6 @@ export default function HudOverlay() {
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <div className="flex flex-col items-center gap-6 pointer-events-auto">
           <div className="relative group">
-            {/* Assistant Avatar when loading/responding */}
             <AnimatePresence mode="wait">
               {loading ? (
                 <motion.div
@@ -130,11 +138,10 @@ export default function HudOverlay() {
               )}
             </AnimatePresence>
 
-            {/* Simulation button - Small and discrete */}
             {!loading && !isListening && (
               <button
                 onClick={simulateSpeech}
-                className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary hover:border-primary/60 transition-colors"
+                className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary hover:border-primary/60 transition-colors whitespace-nowrap"
               >
                 <Sparkles className="w-3 h-3" />
                 <span className="font-mono text-[9px] tracking-widest uppercase">Simular Voz</span>
@@ -191,11 +198,6 @@ export default function HudOverlay() {
                       "AGUARDANDO COMANDO..."
                     )}
                   </p>
-                  {!isListening && !supported && (
-                    <p className="font-mono text-[10px] text-hud-danger/60 uppercase">
-                      Microfone não suportado - Use o modo Simular
-                    </p>
-                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -284,21 +286,21 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* Watermark/Logo */}
+      {/* SAP Logo Watermark - Bottom Right - HIGHEST Z-INDEX */}
+      <div className="absolute bottom-6 right-6 opacity-40 pointer-events-none z-50">
+        <div className="flex flex-col items-end">
+          <p className="font-display text-3xl tracking-tighter text-primary select-none font-black italic hud-glow-text">
+            SAP
+          </p>
+          <div className="h-0.5 w-14 bg-primary/60 mt-[-4px]" />
+        </div>
+      </div>
+
+      {/* Watermark/Logo Background */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-5">
         <p className="font-display text-8xl md:text-[12rem] tracking-[0.5em] text-primary select-none">
           SECURE
         </p>
-      </div>
-
-      {/* SAP Logo Watermark - Bottom Right */}
-      <div className="absolute bottom-4 right-4 opacity-20 pointer-events-none">
-        <div className="flex flex-col items-end">
-          <p className="font-display text-2xl tracking-tighter text-primary select-none font-black italic">
-            SAP
-          </p>
-          <div className="h-0.5 w-12 bg-primary/40 mt-[-4px]" />
-        </div>
       </div>
 
       {/* Timestamp */}
