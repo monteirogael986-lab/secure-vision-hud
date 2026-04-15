@@ -10,45 +10,80 @@ export default function HudOverlay() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
+  const [showInterface, setShowInterface] = useState(true);
   const processingRef = useRef(false);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported } =
     useSpeechRecognition();
 
+  // Reset the 5s timer whenever there's activity
+  const resetInterfaceTimer = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    setShowInterface(true);
+    
+    timerRef.current = setTimeout(() => {
+      if (!isListening && !loading) {
+        setShowInterface(false);
+        setResponse(null); // Also clear response after 5s
+      }
+    }, 5000);
+  }, [isListening, loading]);
+
   const processQuery = useCallback(async (text: string) => {
+    const cleanText = text.trim().toLowerCase();
+    
+    // Command to bring back the interface: "Jarvis"
+    if (cleanText.includes("jarvis")) {
+      resetInterfaceTimer();
+      return;
+    }
+
     if (!text.trim() || processingRef.current) return;
     
     processingRef.current = true;
     setLoading(true);
     setLastTranscript(text);
+    resetInterfaceTimer(); // Reset timer when starting to process
     
     try {
-      // Small artificial delay to ensure the UI feels responsive to the "thinking" state
       await new Promise(r => setTimeout(r, 1000));
       const res = await queryAI(text.trim());
       setResponse(res);
+      // Restart timer after response is received
+      resetInterfaceTimer();
     } catch (err) {
       console.error("Erro ao processar query:", err);
     } finally {
       setLoading(false);
       processingRef.current = false;
     }
-  }, []);
+  }, [resetInterfaceTimer]);
 
-  // UseEffect watches for the final transcript when isListening becomes false
   useEffect(() => {
     if (transcript && !isListening && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, isListening, processQuery]);
 
+  // Keep interface alive while listening or loading
+  useEffect(() => {
+    if (isListening || loading || interimTranscript) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      setShowInterface(true);
+    } else {
+      resetInterfaceTimer();
+    }
+  }, [isListening, loading, interimTranscript, resetInterfaceTimer]);
+
   const handleMicClick = useCallback(() => {
+    resetInterfaceTimer();
     if (isListening) {
       stopListening();
     } else {
       startListening();
     }
-  }, [isListening, startListening, stopListening]);
+  }, [isListening, startListening, stopListening, resetInterfaceTimer]);
 
   const displayText = interimTranscript || transcript;
 
@@ -102,118 +137,127 @@ export default function HudOverlay() {
       </div>
 
       {/* Center: Voice Assistant Interface */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <div className="flex flex-col items-center gap-6 pointer-events-auto">
-          <div className="relative group">
-            <AnimatePresence mode="wait">
-              {loading ? (
-                <motion.div
-                  key="bot"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.3)]"
-                >
-                  <Bot className="w-12 h-12 text-primary animate-bounce" />
-                </motion.div>
-              ) : (
-                <motion.button
-                  key="mic"
-                  initial={{ scale: 0.8, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.8, opacity: 0 }}
-                  onClick={handleMicClick}
-                  className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isListening
-                      ? "bg-hud-danger/20 border-hud-danger/60 text-hud-danger shadow-[0_0_30px_rgba(255,0,0,0.3)]"
-                      : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 shadow-[0_0_20px_rgba(0,255,255,0.1)]"
-                  }`}
-                >
-                  {isListening ? (
-                    <MicOff className="w-10 h-10" />
+      <AnimatePresence>
+        {showInterface && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          >
+            <div className="flex flex-col items-center gap-6 pointer-events-auto">
+              <div className="relative group">
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.div
+                      key="bot"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.3)]"
+                    >
+                      <Bot className="w-12 h-12 text-primary animate-bounce" />
+                    </motion.div>
                   ) : (
-                    <Mic className="w-10 h-10" />
+                    <motion.button
+                      key="mic"
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      onClick={handleMicClick}
+                      className={`relative w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all ${
+                        isListening
+                          ? "bg-hud-danger/20 border-hud-danger/60 text-hud-danger shadow-[0_0_30px_rgba(255,0,0,0.3)]"
+                          : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 shadow-[0_0_20px_rgba(0,255,255,0.1)]"
+                      }`}
+                    >
+                      {isListening ? (
+                        <MicOff className="w-10 h-10" />
+                      ) : (
+                        <Mic className="w-10 h-10" />
+                      )}
+                      {isListening && (
+                        <span className="absolute -inset-2 rounded-full border-2 border-hud-danger/40 animate-pulse" />
+                      )}
+                    </motion.button>
                   )}
-                  {isListening && (
-                    <span className="absolute -inset-2 rounded-full border-2 border-hud-danger/40 animate-pulse" />
+                </AnimatePresence>
+
+                {!loading && !isListening && (
+                  <button
+                    onClick={() => { resetInterfaceTimer(); simulateSpeech(); }}
+                    className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary hover:border-primary/60 transition-colors whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span className="font-mono text-[9px] tracking-widest uppercase">Simular Voz</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="text-center min-h-[80px] max-w-[300px]">
+                <AnimatePresence mode="wait">
+                  {loading ? (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-1"
+                    >
+                      <p className="font-display text-xs text-primary tracking-widest uppercase hud-glow-text">
+                        Assistente Processando
+                      </p>
+                      <div className="flex justify-center gap-1">
+                        {[0, 1, 2].map((i) => (
+                          <motion.div
+                            key={i}
+                            animate={{ opacity: [0.3, 1, 0.3] }}
+                            transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                            className="w-1.5 h-1.5 rounded-full bg-primary"
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                  ) : error ? (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex items-center gap-2 text-hud-danger"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      <p className="font-mono text-xs uppercase tracking-wider">{error}</p>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="space-y-2"
+                    >
+                      <p className={`font-mono text-sm tracking-wide ${isListening ? 'text-primary' : 'text-muted-foreground'}`}>
+                        {isListening && displayText ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-hud-danger animate-pulse" />
+                            "{displayText}"
+                          </span>
+                        ) : isListening ? (
+                          "OUVINDO..."
+                        ) : (
+                          "AGUARDANDO COMANDO..."
+                        )}
+                      </p>
+                    </motion.div>
                   )}
-                </motion.button>
-              )}
-            </AnimatePresence>
-
-            {!loading && !isListening && (
-              <button
-                onClick={simulateSpeech}
-                className="absolute -bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full border border-primary/30 bg-primary/5 text-primary/60 hover:text-primary hover:border-primary/60 transition-colors whitespace-nowrap"
-              >
-                <Sparkles className="w-3 h-3" />
-                <span className="font-mono text-[9px] tracking-widest uppercase">Simular Voz</span>
-              </button>
-            )}
-          </div>
-
-          <div className="text-center min-h-[80px] max-w-[300px]">
-            <AnimatePresence mode="wait">
-              {loading ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-1"
-                >
-                  <p className="font-display text-xs text-primary tracking-widest uppercase hud-glow-text">
-                    Assistente Processando
-                  </p>
-                  <div className="flex justify-center gap-1">
-                    {[0, 1, 2].map((i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-                        className="w-1.5 h-1.5 rounded-full bg-primary"
-                      />
-                    ))}
-                  </div>
-                </motion.div>
-              ) : error ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2 text-hud-danger"
-                >
-                  <AlertCircle className="w-4 h-4" />
-                  <p className="font-mono text-xs uppercase tracking-wider">{error}</p>
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="space-y-2"
-                >
-                  <p className={`font-mono text-sm tracking-wide ${isListening ? 'text-primary' : 'text-muted-foreground'}`}>
-                    {isListening && displayText ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-hud-danger animate-pulse" />
-                        "{displayText}"
-                      </span>
-                    ) : isListening ? (
-                      "OUVINDO..."
-                    ) : (
-                      "AGUARDANDO COMANDO..."
-                    )}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom-left: Response panel - MOVED UP and restricted pointer events */}
       <AnimatePresence>
-        {(response || lastTranscript) && !loading && (
+        {showInterface && (response || lastTranscript) && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: -80 }} // MOVED UP (from 0 to -80)
+            animate={{ opacity: 1, y: -80 }}
             exit={{ opacity: 0, y: 20 }}
             className="absolute bottom-12 left-6 right-6 md:right-auto md:max-w-[380px] pointer-events-auto"
           >
@@ -251,10 +295,10 @@ export default function HudOverlay() {
 
       {/* Bottom-right: Access control status - MOVED UP */}
       <AnimatePresence>
-        {response && !loading && (
+        {showInterface && response && !loading && (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0, y: -80 }} // MOVED UP
+            animate={{ opacity: 1, x: 0, y: -80 }}
             exit={{ opacity: 0, x: 20 }}
             className="absolute bottom-12 right-6 pointer-events-auto hidden md:block"
           >
