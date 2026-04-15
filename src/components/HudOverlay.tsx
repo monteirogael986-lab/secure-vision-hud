@@ -291,6 +291,16 @@ export default function HudOverlay() {
         </p>
       </div>
 
+      {/* SAP Logo Watermark - Bottom Right */}
+      <div className="absolute bottom-4 right-4 opacity-20 pointer-events-none">
+        <div className="flex flex-col items-end">
+          <p className="font-display text-2xl tracking-tighter text-primary select-none font-black italic">
+            SAP
+          </p>
+          <div className="h-0.5 w-12 bg-primary/40 mt-[-4px]" />
+        </div>
+      </div>
+
       {/* Timestamp */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2">
         <p className="font-mono text-[10px] text-muted-foreground tracking-widest">

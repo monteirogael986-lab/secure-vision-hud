@@ -98,7 +98,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     setIsListening(true);
     setError(null);
 
-    const phrases = ["Quero acessar o sistema", "Verificar permissões", "Abrir porta principal"];
+    const phrases = [
+      "acessar os dados da planta", 
+      "ver as informações do funcionário João", 
+      "mostrar um relatório"
+    ];
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
     
     // Simulate interim results
