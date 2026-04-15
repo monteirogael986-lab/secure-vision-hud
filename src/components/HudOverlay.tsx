@@ -23,6 +23,8 @@ export default function HudOverlay() {
     setLastTranscript(text);
     
     try {
+      // Small artificial delay to ensure the UI feels responsive to the "thinking" state
+      await new Promise(r => setTimeout(r, 1000));
       const res = await queryAI(text.trim());
       setResponse(res);
     } catch (err) {
@@ -33,6 +35,7 @@ export default function HudOverlay() {
     }
   }, []);
 
+  // UseEffect watches for the final transcript when isListening becomes false
   useEffect(() => {
     if (transcript && !isListening && !processingRef.current) {
       processQuery(transcript);
@@ -205,14 +208,14 @@ export default function HudOverlay() {
         </div>
       </div>
 
-      {/* Bottom-left: Response panel */}
+      {/* Bottom-left: Response panel - MOVED UP and restricted pointer events */}
       <AnimatePresence>
         {(response || lastTranscript) && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            animate={{ opacity: 1, y: -80 }} // MOVED UP (from 0 to -80)
             exit={{ opacity: 0, y: 20 }}
-            className="absolute bottom-6 left-6 right-6 md:right-auto md:max-w-[380px] pointer-events-auto"
+            className="absolute bottom-12 left-6 right-6 md:right-auto md:max-w-[380px] pointer-events-auto"
           >
             <div className="hud-panel p-3">
               <div className="flex items-center gap-2 mb-2">
@@ -246,14 +249,14 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* Bottom-right: Access control status */}
+      {/* Bottom-right: Access control status - MOVED UP */}
       <AnimatePresence>
         {response && !loading && (
           <motion.div
             initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
+            animate={{ opacity: 1, x: 0, y: -80 }} // MOVED UP
             exit={{ opacity: 0, x: 20 }}
-            className="absolute bottom-6 right-6 pointer-events-auto hidden md:block"
+            className="absolute bottom-12 right-6 pointer-events-auto hidden md:block"
           >
             <div className="hud-panel p-4">
               {response.accessGranted ? (

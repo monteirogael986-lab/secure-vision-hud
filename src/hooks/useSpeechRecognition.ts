@@ -37,7 +37,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = "pt-BR";
     recognition.interimResults = true;
-    recognition.continuous = false; // Set to false to trigger onresult more predictably
+    recognition.continuous = false;
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -62,7 +62,6 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
       if (finalTranscript) {
         setTranscript(finalTranscript);
         setInterimTranscript("");
-        // No auto-stop here, let onend handle it
       } else {
         setInterimTranscript(interim);
       }
@@ -94,7 +93,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   }, []);
 
   const simulateSpeech = useCallback(() => {
-    // Reset state
+    // Reset state immediately
     setTranscript("");
     setInterimTranscript("");
     setIsListening(true);
@@ -107,16 +106,21 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     ];
     const phrase = phrases[Math.floor(Math.random() * phrases.length)];
     
-    // Simulate thinking/interim
-    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 800);
-    setTimeout(() => setInterimTranscript(phrase.split(" ").slice(0, 2).join(" ") + "..."), 1500);
-
-    // Final result
+    // Simulate thinking/interim with longer delays to ensure visual completion
     setTimeout(() => {
-      setTranscript(phrase);
+      setInterimTranscript(phrase.split(" ")[0] + "...");
+    }, 1000);
+
+    setTimeout(() => {
+      setInterimTranscript(phrase.split(" ").slice(0, 3).join(" ") + "...");
+    }, 2200);
+
+    // Final result only after full simulation
+    setTimeout(() => {
       setInterimTranscript("");
+      setTranscript(phrase);
       setIsListening(false);
-    }, 2500);
+    }, 3500);
   }, []);
 
   return { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported };
