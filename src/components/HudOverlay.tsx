@@ -10,7 +10,7 @@ export default function HudOverlay() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
-  const [showInterface, setShowInterface] = useState(true);
+  const [showInterface, setShowInterface] = useState(false); // INVISIBLE BY DEFAULT
   const processingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -21,26 +21,24 @@ export default function HudOverlay() {
   const startHideTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     
-    // Timer only runs if we are not currently processing something
-    if (!loading) {
-      timerRef.current = setTimeout(() => {
-        if (!processingRef.current && !loading) {
-          setShowInterface(false);
-          setResponse(null);
-        }
-      }, 5000);
-    }
+    timerRef.current = setTimeout(() => {
+      // Only hide if not listening to a command and not processing
+      if (!processingRef.current && !loading) {
+        setShowInterface(false);
+        setResponse(null);
+      }
+    }, 5000);
   }, [loading]);
 
-  // Restart timer on key state changes, but NOT on interim noise
+  // Restart timer on state changes
   useEffect(() => {
-    if (showInterface && !loading) {
+    if (showInterface && !loading && !isListening) {
       startHideTimer();
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [showInterface, loading, response, lastTranscript, startHideTimer]);
+  }, [showInterface, loading, isListening, response, startHideTimer]);
 
   // Command "Jarvis" logic
   const checkJarvis = useCallback((text: string) => {
@@ -55,8 +53,10 @@ export default function HudOverlay() {
   const processQuery = useCallback(async (text: string) => {
     if (!text.trim() || processingRef.current) return;
     
+    // Check for Jarvis to wake up
     if (checkJarvis(text)) return;
 
+    // Only process other commands if interface is visible
     if (!showInterface) return;
 
     processingRef.current = true;
@@ -71,16 +71,18 @@ export default function HudOverlay() {
     } finally {
       setLoading(false);
       processingRef.current = false;
+      startHideTimer();
     }
-  }, [showInterface, checkJarvis]);
+  }, [showInterface, checkJarvis, startHideTimer]);
 
+  // Handle final results
   useEffect(() => {
     if (transcript && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, processQuery]);
 
-  // Catch Jarvis in interim results for better responsiveness
+  // Catch Jarvis in interim results for fast wake-up
   useEffect(() => {
     if (interimTranscript && !showInterface) {
       if (interimTranscript.toLowerCase().includes("jarvis")) {
@@ -89,7 +91,7 @@ export default function HudOverlay() {
     }
   }, [interimTranscript, showInterface]);
 
-  // background listening
+  // background listening - START IMMEDIATELY
   useEffect(() => {
     if (supported && !isListening && !processingRef.current) {
       startListening(true);
@@ -158,9 +160,10 @@ export default function HudOverlay() {
         <AnimatePresence>
           {showInterface && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
               className="flex flex-col items-center gap-6 pointer-events-auto"
             >
               <div className="relative group">
@@ -168,21 +171,21 @@ export default function HudOverlay() {
                   {loading ? (
                     <motion.div
                       key="bot"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.2)]"
                     >
                       <Bot className="w-12 h-12 text-primary" />
                     </motion.div>
                   ) : (
                     <motion.button
                       key="mic"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
                       onClick={handleMicClick}
-                      className="relative w-24 h-24 rounded-full border-2 border-primary/40 bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-colors"
+                      className="relative w-24 h-24 rounded-full border-2 border-primary/40 bg-primary/10 text-primary flex items-center justify-center hover:bg-primary/20 transition-all shadow-[0_0_20px_rgba(0,255,255,0.1)]"
                     >
                       <Mic className="w-10 h-10" />
                     </motion.button>
@@ -216,6 +219,13 @@ export default function HudOverlay() {
         </AnimatePresence>
       </div>
 
+      {/* Secret trigger for simulation when invisible - for testing if mic fails */}
+      {!showInterface && (
+        <div className="absolute bottom-0 left-0 w-10 h-10 pointer-events-auto opacity-0 cursor-default" 
+             onClick={() => simulateSpeech("Jarvis")} 
+             title="Test Trigger" />
+      )}
+
       {/* Response panel - Positioned Up */}
       <AnimatePresence>
         {showInterface && (response || lastTranscript) && !loading && (
@@ -242,7 +252,7 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* SAP Logo Watermark */}
+      {/* SAP Logo Watermark - Always Visible */}
       <div className="absolute bottom-6 right-6 opacity-40 pointer-events-none z-50">
         <div className="flex flex-col items-end">
           <p className="font-display text-3xl tracking-tighter text-primary select-none font-black italic hud-glow-text">
