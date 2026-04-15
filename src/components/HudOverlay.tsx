@@ -43,7 +43,7 @@ export default function HudOverlay() {
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
       {/* Scanline */}
-      <div className="absolute inset-0 hud-scanline" />
+      <div className="absolute inset-0 hud-scanline pointer-events-none" />
 
       {/* Corner brackets */}
       <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
@@ -90,8 +90,8 @@ export default function HudOverlay() {
       </div>
 
       {/* Center: Voice Assistant Interface */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-auto">
-        <div className="flex flex-col items-center gap-6">
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="flex flex-col items-center gap-6 pointer-events-auto">
           <div className="relative group">
             {/* Assistant Avatar when loading/responding */}
             <AnimatePresence mode="wait">
