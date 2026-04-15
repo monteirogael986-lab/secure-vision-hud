@@ -32,8 +32,8 @@ export default function CameraView() {
         </div>
       )}
 
-      {/* Dim overlay for readability */}
-      <div className="absolute inset-0 bg-background/30" />
+      {/* Very light dim overlay for readability */}
+      <div className="absolute inset-0 bg-black/10 pointer-events-none" />
 
       {/* HUD overlay */}
       <HudOverlay />

@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface UseSpeechRecognitionReturn {
   isListening: boolean;
   transcript: string;
   interimTranscript: string;
   error: string | null;
-  startListening: () => void;
+  startListening: (continuous?: boolean) => void;
   stopListening: () => void;
-  simulateSpeech: () => void;
+  simulateSpeech: (text?: string) => void;
   supported: boolean;
 }
 
@@ -17,6 +17,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [interimTranscript, setInterimTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const isContinuousRef = useRef(false);
 
   const SpeechRecognitionAPI = typeof window !== "undefined"
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -24,9 +25,9 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
   const supported = !!SpeechRecognitionAPI;
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback((continuous = false) => {
     if (!SpeechRecognitionAPI) {
-      setError("Microfone não suportado no navegador.");
+      setError("Microfone não suportado.");
       return;
     }
 
@@ -37,20 +38,19 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = "pt-BR";
     recognition.interimResults = true;
-    recognition.continuous = false;
+    recognition.continuous = continuous;
+    isContinuousRef.current = continuous;
 
     recognition.onstart = () => {
       setIsListening(true);
       setError(null);
-      setTranscript("");
-      setInterimTranscript("");
     };
 
     recognition.onresult = (event: any) => {
       let finalTranscript = "";
       let interim = "";
 
-      for (let i = 0; i < event.results.length; i++) {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
         if (result.isFinal) {
           finalTranscript += result[0].transcript;
@@ -61,7 +61,10 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
       if (finalTranscript) {
         setTranscript(finalTranscript);
-        setInterimTranscript("");
+        // If it's continuous, we don't clear interim yet, but for Jarvis we want to catch it
+        if (!continuous) {
+          setInterimTranscript("");
+        }
       } else {
         setInterimTranscript(interim);
       }
@@ -69,16 +72,18 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     recognition.onerror = (event: any) => {
       console.error("Speech Error:", event.error);
-      if (event.error === 'not-allowed') {
-        setError("Permissão de microfone negada.");
-      } else {
-        setError(`Erro: ${event.error}`);
+      if (event.error !== 'no-speech') {
+        setError(event.error);
+        setIsListening(false);
       }
-      setIsListening(false);
     };
 
     recognition.onend = () => {
-      setIsListening(false);
+      if (isContinuousRef.current) {
+        try { recognition.start(); } catch(e) {}
+      } else {
+        setIsListening(false);
+      }
     };
 
     recognitionRef.current = recognition;
@@ -86,41 +91,33 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   }, [SpeechRecognitionAPI]);
 
   const stopListening = useCallback(() => {
+    isContinuousRef.current = false;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
     setIsListening(false);
   }, []);
 
-  const simulateSpeech = useCallback(() => {
-    // Reset state immediately
+  const simulateSpeech = useCallback((text?: string) => {
     setTranscript("");
     setInterimTranscript("");
     setIsListening(true);
-    setError(null);
 
     const phrases = [
       "acessar os dados da planta", 
       "ver as informações do funcionário João", 
-      "mostrar um relatório"
+      "mostrar um relatório",
+      "Jarvis"
     ];
-    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    const phrase = text || phrases[Math.floor(Math.random() * phrases.length)];
     
-    // Simulate thinking/interim with longer delays to ensure visual completion
-    setTimeout(() => {
-      setInterimTranscript(phrase.split(" ")[0] + "...");
-    }, 1000);
-
-    setTimeout(() => {
-      setInterimTranscript(phrase.split(" ").slice(0, 3).join(" ") + "...");
-    }, 2200);
-
-    // Final result only after full simulation
+    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 1000);
+    
     setTimeout(() => {
       setInterimTranscript("");
       setTranscript(phrase);
       setIsListening(false);
-    }, 3500);
+    }, 2500);
   }, []);
 
   return { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported };
