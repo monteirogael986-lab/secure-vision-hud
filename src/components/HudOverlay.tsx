@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Mic, MicOff, ShieldCheck, ShieldX, User, MessageSquare } from "lucide-react";
+import { Heart, Mic, MicOff, ShieldCheck, ShieldX, User, MessageSquare, Bot } from "lucide-react";
 import { useHeartbeat } from "@/hooks/useHeartbeat";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { queryAI, type AIResponse } from "@/lib/aiService";
@@ -10,7 +10,7 @@ export default function HudOverlay() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
-  const { isListening, transcript, startListening, stopListening, supported } =
+  const { isListening, transcript, interimTranscript, startListening, stopListening, supported } =
     useSpeechRecognition();
 
   const processQuery = useCallback(async (text: string) => {
@@ -22,7 +22,6 @@ export default function HudOverlay() {
     setLoading(false);
   }, [loading]);
 
-  // Process transcript when speech recognition completes
   useEffect(() => {
     if (transcript && !isListening) {
       processQuery(transcript);
@@ -37,18 +36,17 @@ export default function HudOverlay() {
     }
   }, [isListening, startListening, stopListening]);
 
+  const displayText = interimTranscript || transcript;
+
   return (
     <div className="absolute inset-0 pointer-events-none z-10">
-      {/* Scanline */}
       <div className="absolute inset-0 hud-scanline" />
 
-      {/* Corner brackets */}
       <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
       <div className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 border-primary/40" />
       <div className="absolute bottom-4 left-4 w-8 h-8 border-l-2 border-b-2 border-primary/40" />
       <div className="absolute bottom-4 right-4 w-8 h-8 border-r-2 border-b-2 border-primary/40" />
 
-      {/* Top-left: User identity */}
       <div className="absolute top-6 left-6 pointer-events-auto">
         <div className="hud-panel p-3 max-w-[220px]">
           <div className="flex items-center gap-3 mb-2">
@@ -73,7 +71,6 @@ export default function HudOverlay() {
         </div>
       </div>
 
-      {/* Top-right: Heartbeat */}
       <div className="absolute top-6 right-6 pointer-events-auto">
         <div className="hud-panel p-3">
           <div className="flex items-center gap-2">
@@ -86,31 +83,55 @@ export default function HudOverlay() {
         </div>
       </div>
 
-      {/* Center: Voice Assistant Microphone */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-auto">
-        <button
-          onClick={handleMicClick}
-          disabled={loading || !supported}
-          className={`relative w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all disabled:opacity-40 ${
-            isListening
-              ? "bg-hud-danger/20 border-hud-danger/60 text-hud-danger"
-              : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
-          }`}
-        >
-          {isListening ? (
-            <MicOff className="w-8 h-8" />
-          ) : (
-            <Mic className="w-8 h-8" />
-          )}
-          {isListening && (
-            <span className="absolute -inset-1 rounded-full border-2 border-hud-danger/60" />
-          )}
-        </button>
+        <div className="flex flex-col items-center gap-4">
+          <button
+            onClick={handleMicClick}
+            disabled={loading}
+            className={`relative w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all disabled:opacity-40 ${
+              isListening
+                ? "bg-hud-danger/20 border-hud-danger/60 text-hud-danger"
+                : loading
+                ? "bg-primary/20 border-primary/40 text-primary"
+                : "bg-primary/20 border-primary/40 text-primary hover:bg-primary/30"
+            }`}
+          >
+            {loading ? (
+              <Bot className="w-8 h-8" />
+            ) : isListening ? (
+              <MicOff className="w-8 h-8" />
+            ) : (
+              <Mic className="w-8 h-8" />
+            )}
+            {isListening && (
+              <span className="absolute -inset-1 rounded-full border-2 border-hud-danger/60" />
+            )}
+          </button>
+
+          <div className="text-center min-h-[60px]">
+            {loading ? (
+              <p className="font-mono text-sm text-primary tracking-wider animate-pulse">
+                ASSISTENTE RESPONDENDO...
+              </p>
+            ) : isListening && displayText ? (
+              <p className="font-mono text-sm text-primary tracking-wider">
+                🎙️ {displayText}
+              </p>
+            ) : isListening ? (
+              <p className="font-mono text-sm text-muted-foreground tracking-wider">
+                OUVINDO...
+              </p>
+            ) : (
+              <p className="font-mono text-sm text-muted-foreground tracking-wider">
+                TOQUE PRA FALAR
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Bottom-left: Response panel */}
       <AnimatePresence>
-        {(response || lastTranscript) && (
+        {(response || lastTranscript) && !loading && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -125,11 +146,10 @@ export default function HudOverlay() {
                 </span>
               </div>
 
-              {/* Response area */}
               {response && (
                 <div className="mb-2">
                   {lastTranscript && (
-                    <p className="font-mono text-[10px] text-muted-foreground mb-1 truncate">
+                    <p className="font-mono text-[10px] text-muted-foreground mb-1">
                       🎙️ "{lastTranscript}"
                     </p>
                   )}
@@ -149,7 +169,6 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* Bottom-right: Access control result */}
       <AnimatePresence>
         {response && (
           <motion.div
@@ -189,14 +208,12 @@ export default function HudOverlay() {
         )}
       </AnimatePresence>
 
-      {/* Watermark */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <p className="font-display text-6xl md:text-8xl tracking-[0.5em] text-primary/5 select-none">
           SAP
         </p>
       </div>
 
-      {/* Timestamp */}
       <div className="absolute top-6 left-1/2 -translate-x-1/2">
         <p className="font-mono text-[10px] text-muted-foreground tracking-wider">
           {new Date().toISOString().replace("T", " ").slice(0, 19)} UTC
