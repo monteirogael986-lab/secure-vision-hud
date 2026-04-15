@@ -59,8 +59,8 @@ export default function HudOverlay() {
     setLastTranscript(text);
     
     try {
-      // Delay de 7 segundos durante o processamento do assistente
-      await new Promise(r => setTimeout(r, 7000));
+      // Delay de 4 segundos durante o processamento do assistente
+      await new Promise(r => setTimeout(r, 4000));
       const res = await queryAI(text.trim());
       setResponse(res);
       // Reset speech history after processing

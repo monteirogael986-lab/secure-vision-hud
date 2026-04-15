@@ -19,6 +19,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
   const isContinuousRef = useRef(false);
+  const finalTranscriptAccumulator = useRef("");
 
   const SpeechRecognitionAPI = typeof window !== "undefined"
     ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -29,6 +30,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   const resetTranscript = useCallback(() => {
     setTranscript("");
     setInterimTranscript("");
+    finalTranscriptAccumulator.current = "";
   }, []);
 
   const startListening = useCallback((continuous = false) => {
@@ -44,7 +46,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     const recognition = new SpeechRecognitionAPI();
     recognition.lang = "pt-BR";
     recognition.interimResults = true;
-    recognition.continuous = continuous;
+    recognition.continuous = true; // Always continuous to capture long phrases better
     isContinuousRef.current = continuous;
 
     recognition.onstart = () => {
@@ -53,24 +55,23 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     recognition.onresult = (event: any) => {
-      let finalTranscript = "";
       let interim = "";
+      let final = "";
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript;
+        const transcriptSegment = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          final += transcriptSegment;
         } else {
-          interim += result[0].transcript;
+          interim += transcriptSegment;
         }
       }
 
-      if (finalTranscript) {
-        setTranscript(finalTranscript);
-        setInterimTranscript("");
-      } else {
-        setInterimTranscript(interim);
+      if (final) {
+        finalTranscriptAccumulator.current += " " + final;
+        setTranscript(finalTranscriptAccumulator.current.trim());
       }
+      setInterimTranscript(interim);
     };
 
     recognition.onerror = (event: any) => {
@@ -82,6 +83,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     recognition.onend = () => {
+      // If we are in continuous mode (background Jarvis), restart
       if (isContinuousRef.current) {
         try { recognition.start(); } catch(e) {}
       } else {
@@ -102,8 +104,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
   }, []);
 
   const simulateSpeech = useCallback((text?: string) => {
-    setTranscript("");
-    setInterimTranscript("");
+    resetTranscript();
     setIsListening(true);
 
     const phrases = [
@@ -114,14 +115,21 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     ];
     const phrase = text || phrases[Math.floor(Math.random() * phrases.length)];
     
-    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 800);
-    
+    // Simulate long phrase construction
+    const words = phrase.split(" ");
+    words.forEach((word, index) => {
+      setTimeout(() => {
+        setInterimTranscript(words.slice(0, index + 1).join(" ") + "...");
+      }, 500 * (index + 1));
+    });
+
     setTimeout(() => {
       setInterimTranscript("");
       setTranscript(phrase);
+      finalTranscriptAccumulator.current = phrase;
       setIsListening(false);
-    }, 2000);
-  }, []);
+    }, 500 * (words.length + 1));
+  }, [resetTranscript]);
 
   return { isListening, transcript, interimTranscript, error, startListening, stopListening, resetTranscript, simulateSpeech, supported };
 }
