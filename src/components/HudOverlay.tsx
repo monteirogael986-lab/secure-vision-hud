@@ -10,53 +10,48 @@ export default function HudOverlay() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<AIResponse | null>(null);
   const [lastTranscript, setLastTranscript] = useState("");
-  const [showInterface, setShowInterface] = useState(false); // INVISIBLE BY DEFAULT
+  const [showInterface, setShowInterface] = useState(false);
   const processingRef = useRef(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { isListening, transcript, interimTranscript, startListening, stopListening, simulateSpeech, supported } =
+  const { isListening, transcript, interimTranscript, startListening, stopListening, resetTranscript, simulateSpeech, supported } =
     useSpeechRecognition();
 
-  // Robust timer to hide interface after 5s of inactivity
   const startHideTimer = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    
     timerRef.current = setTimeout(() => {
-      // Only hide if not listening to a command and not processing
       if (!processingRef.current && !loading) {
         setShowInterface(false);
         setResponse(null);
+        setLastTranscript("");
       }
     }, 5000);
   }, [loading]);
 
-  // Restart timer on state changes
   useEffect(() => {
-    if (showInterface && !loading && !isListening) {
+    if (showInterface && !loading) {
       startHideTimer();
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [showInterface, loading, isListening, response, startHideTimer]);
+  }, [showInterface, loading, response, startHideTimer]);
 
-  // Command "Jarvis" logic
   const checkJarvis = useCallback((text: string) => {
     const cleanText = text.toLowerCase().trim();
     if (cleanText === "jarvis" || cleanText.includes("jarvis")) {
       setShowInterface(true);
+      resetTranscript();
       return true;
     }
     return false;
-  }, []);
+  }, [resetTranscript]);
 
   const processQuery = useCallback(async (text: string) => {
     if (!text.trim() || processingRef.current) return;
     
-    // Check for Jarvis to wake up
     if (checkJarvis(text)) return;
 
-    // Only process other commands if interface is visible
     if (!showInterface) return;
 
     processingRef.current = true;
@@ -66,6 +61,8 @@ export default function HudOverlay() {
     try {
       const res = await queryAI(text.trim());
       setResponse(res);
+      // Reset speech history after processing
+      resetTranscript();
     } catch (err) {
       console.error("Erro:", err);
     } finally {
@@ -73,25 +70,22 @@ export default function HudOverlay() {
       processingRef.current = false;
       startHideTimer();
     }
-  }, [showInterface, checkJarvis, startHideTimer]);
+  }, [showInterface, checkJarvis, startHideTimer, resetTranscript]);
 
-  // Handle final results
   useEffect(() => {
     if (transcript && !processingRef.current) {
       processQuery(transcript);
     }
   }, [transcript, processQuery]);
 
-  // Catch Jarvis in interim results for fast wake-up
   useEffect(() => {
-    if (interimTranscript && !showInterface) {
-      if (interimTranscript.toLowerCase().includes("jarvis")) {
-        setShowInterface(true);
+    if (interimTranscript) {
+      if (!showInterface) {
+        checkJarvis(interimTranscript);
       }
     }
-  }, [interimTranscript, showInterface]);
+  }, [interimTranscript, showInterface, checkJarvis]);
 
-  // background listening - START IMMEDIATELY
   useEffect(() => {
     if (supported && !isListening && !processingRef.current) {
       startListening(true);
@@ -111,13 +105,11 @@ export default function HudOverlay() {
 
   return (
     <div className="absolute inset-0 pointer-events-none z-20 bg-transparent">
-      {/* Corner brackets */}
       <div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-primary/40" />
       <div className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 border-primary/40" />
       <div className="absolute bottom-4 left-4 w-8 h-8 border-l-2 border-b-2 border-primary/40" />
       <div className="absolute bottom-4 right-4 w-8 h-8 border-r-2 border-b-2 border-primary/40" />
 
-      {/* Top-left: User identity */}
       <div className="absolute top-6 left-6 pointer-events-auto">
         <div className="hud-panel p-3 max-w-[220px]">
           <div className="flex items-center gap-3 mb-2">
@@ -142,7 +134,6 @@ export default function HudOverlay() {
         </div>
       </div>
 
-      {/* Top-right: Heartbeat */}
       <div className="absolute top-6 right-6 pointer-events-auto">
         <div className="hud-panel p-3">
           <div className="flex items-center gap-2">
@@ -155,15 +146,13 @@ export default function HudOverlay() {
         </div>
       </div>
 
-      {/* Center: Voice Assistant Interface */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
         <AnimatePresence>
           {showInterface && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 10 }}
-              transition={{ duration: 0.4, ease: "easeOut" }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
               className="flex flex-col items-center gap-6 pointer-events-auto"
             >
               <div className="relative group">
@@ -174,7 +163,7 @@ export default function HudOverlay() {
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
-                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.2)]"
+                      className="w-24 h-24 rounded-full border-2 border-primary bg-primary/10 flex items-center justify-center shadow-[0_0_30px_rgba(0,255,255,0.3)]"
                     >
                       <Bot className="w-12 h-12 text-primary" />
                     </motion.div>
@@ -204,29 +193,21 @@ export default function HudOverlay() {
               </div>
 
               <div className="text-center min-h-[80px] max-w-[300px]">
-                {loading ? (
-                  <p className="font-display text-xs text-primary tracking-widest uppercase hud-glow-text">
-                    Assistente Processando
-                  </p>
-                ) : (
-                  <p className="font-mono text-sm tracking-wide text-primary">
-                    {displayText ? `"${displayText}"` : "AGUARDANDO..."}
-                  </p>
-                )}
+                <p className="font-mono text-sm tracking-wide text-primary">
+                  {loading ? (
+                    <span className="animate-pulse">ASSISTENTE PROCESSANDO...</span>
+                  ) : displayText ? (
+                    `"${displayText}"`
+                  ) : (
+                    "AGUARDANDO..."
+                  )}
+                </p>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Secret trigger for simulation when invisible - for testing if mic fails */}
-      {!showInterface && (
-        <div className="absolute bottom-0 left-0 w-10 h-10 pointer-events-auto opacity-0 cursor-default" 
-             onClick={() => simulateSpeech("Jarvis")} 
-             title="Test Trigger" />
-      )}
-
-      {/* Response panel - Positioned Up */}
       <AnimatePresence>
         {showInterface && (response || lastTranscript) && !loading && (
           <motion.div
@@ -242,17 +223,23 @@ export default function HudOverlay() {
                   SISTEMA DE RESPOSTA
                 </span>
               </div>
-              {response && (
-                <div className="p-3 border text-xs font-mono leading-relaxed bg-background/20">
-                  {response.text}
-                </div>
-              )}
+              <div className="mb-2">
+                {lastTranscript && (
+                  <p className="font-mono text-[10px] text-muted-foreground mb-1 italic">
+                    🎙️ "{lastTranscript}"
+                  </p>
+                )}
+                {response && (
+                  <div className={`p-3 border text-xs font-mono leading-relaxed bg-background/20 ${response.accessGranted ? 'border-hud-success/30 text-hud-success' : 'border-hud-danger/30 text-hud-danger'}`}>
+                    {response.text}
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SAP Logo Watermark - Always Visible */}
       <div className="absolute bottom-6 right-6 opacity-40 pointer-events-none z-50">
         <div className="flex flex-col items-end">
           <p className="font-display text-3xl tracking-tighter text-primary select-none font-black italic hud-glow-text">

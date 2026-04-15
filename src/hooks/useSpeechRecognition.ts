@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 
 interface UseSpeechRecognitionReturn {
   isListening: boolean;
@@ -7,6 +7,7 @@ interface UseSpeechRecognitionReturn {
   error: string | null;
   startListening: (continuous?: boolean) => void;
   stopListening: () => void;
+  resetTranscript: () => void;
   simulateSpeech: (text?: string) => void;
   supported: boolean;
 }
@@ -24,6 +25,11 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     : null;
 
   const supported = !!SpeechRecognitionAPI;
+
+  const resetTranscript = useCallback(() => {
+    setTranscript("");
+    setInterimTranscript("");
+  }, []);
 
   const startListening = useCallback((continuous = false) => {
     if (!SpeechRecognitionAPI) {
@@ -61,10 +67,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
       if (finalTranscript) {
         setTranscript(finalTranscript);
-        // If it's continuous, we don't clear interim yet, but for Jarvis we want to catch it
-        if (!continuous) {
-          setInterimTranscript("");
-        }
+        setInterimTranscript("");
       } else {
         setInterimTranscript(interim);
       }
@@ -72,7 +75,7 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
 
     recognition.onerror = (event: any) => {
       console.error("Speech Error:", event.error);
-      if (event.error !== 'no-speech') {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
         setError(event.error);
         setIsListening(false);
       }
@@ -111,14 +114,14 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     ];
     const phrase = text || phrases[Math.floor(Math.random() * phrases.length)];
     
-    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 1000);
+    setTimeout(() => setInterimTranscript(phrase.split(" ")[0] + "..."), 800);
     
     setTimeout(() => {
       setInterimTranscript("");
       setTranscript(phrase);
       setIsListening(false);
-    }, 2500);
+    }, 2000);
   }, []);
 
-  return { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported };
+  return { isListening, transcript, interimTranscript, error, startListening, stopListening, resetTranscript, simulateSpeech, supported };
 }
