@@ -7,6 +7,7 @@ interface UseSpeechRecognitionReturn {
   error: string | null;
   startListening: () => void;
   stopListening: () => void;
+  simulateSpeech: () => void;
   supported: boolean;
 }
 
@@ -34,9 +35,14 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     }
 
     const recognition = new SpeechRecognitionAPI();
-    recognition.lang = "en-US";
+    recognition.lang = "pt-BR"; // Change to Portuguese since the app is in PT
     recognition.interimResults = true;
     recognition.continuous = true;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      setError(null);
+    };
 
     recognition.onresult = (event: any) => {
       let finalTranscript = "";
@@ -61,37 +67,56 @@ export function useSpeechRecognition(): UseSpeechRecognitionReturn {
     };
 
     recognition.onerror = (event: any) => {
+      console.error("Speech Recognition Error:", event.error);
       setError(event.error);
       setIsListening(false);
       setInterimTranscript("");
     };
 
     recognition.onend = () => {
-      if (isListening) {
-        recognition.start();
-      } else {
-        setIsListening(false);
-        setInterimTranscript("");
-      }
+      setIsListening(false);
+      setInterimTranscript("");
     };
 
     recognitionRef.current = recognition;
-    setError(null);
     setTranscript("");
     setInterimTranscript("");
-    setIsListening(true);
     recognition.start();
-  }, [SpeechRecognitionAPI, isListening]);
+  }, [SpeechRecognitionAPI]);
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      recognitionRef.current.onend = null;
       recognitionRef.current.stop();
-      recognitionRef.current = null;
     }
     setIsListening(false);
     setInterimTranscript("");
   }, []);
 
-  return { isListening, transcript, interimTranscript, error, startListening, stopListening, supported };
+  const simulateSpeech = useCallback(() => {
+    setTranscript("");
+    setInterimTranscript("");
+    setIsListening(true);
+    setError(null);
+
+    const phrases = ["Quero acessar o sistema", "Verificar permissões", "Abrir porta principal"];
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    
+    // Simulate interim results
+    setTimeout(() => {
+      setInterimTranscript(phrase.split(" ")[0] + "...");
+    }, 1000);
+
+    setTimeout(() => {
+      setInterimTranscript(phrase + "...");
+    }, 2000);
+
+    // Final result
+    setTimeout(() => {
+      setTranscript(phrase);
+      setInterimTranscript("");
+      setIsListening(false);
+    }, 3500);
+  }, []);
+
+  return { isListening, transcript, interimTranscript, error, startListening, stopListening, simulateSpeech, supported };
 }
